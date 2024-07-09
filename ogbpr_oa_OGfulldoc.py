@@ -4,19 +4,9 @@ import PyPDF2
 import openai
 from openai import OpenAI
 from openai import AzureOpenAI
-os.environ["AZURE_OPENAI_ENDPOINT"] = 'https://og-auto-openai.openai.azure.com/'
-os.environ["AZURE_OPENAI_API_KEY"] = '2b622cd6fa304be68670fb661a83c896'
 
-# Load environment variables from .env file
-# load_dotenv()
 
-# Set your OpenAI API key from the environment variable
-# openai.api_key = os.getenv('OPENAI_API_KEY')
-# client = OpenAI(
-#     # This is the default and can be omitted
-#     api_key=os.environ.get("OPENAI_API_KEY"),
-# )
-
+load_dotenv()
 
 client = AzureOpenAI(
   azure_endpoint = os.getenv("AZURE_OPENAI_ENDPOINT"),
@@ -26,18 +16,35 @@ client = AzureOpenAI(
 
 # Define expert prompts
 prompts = {
-    "Marketing": "As a marketing expert, analyze the following text. Identify positive and negative developments and the reasons given for these. If no reasons are given, raise a question. If there is no content related to marketing, or the page is simply a header or title page, please state that there is no content to analyze.",
-    "Operational": "As an operational expert, analyze the following text. Identify positive and negative developments and the reasons given for these. If no reasons are given, raise a question.",
-    "Technical": "As a technical expert, analyze the following text. Identify positive and negative developments and the reasons given for these. If no reasons are given, raise a question.",
-    "Financial": "As a financial expert, analyze the following text. Identify positive and negative developments and the reasons given for these. If no reasons are given, raise a question."
+    "Marketing": 
+    "Act as an expert in Marketing of Mobile Networks, analyze the following text."
+    "Summarise the marketing content and identify the key points in 10 bullet points."
+    "If there is content that is better suited to another expert, please state this."
+    "Identify positive and negative developments and the reasons given for these."
+    "If no reasons are given for the change, raise a question."
+    ,
+    "Technical and Operational": 
+    "Act as a Technical and Operational expert in  Mobile Networks, analyze the following text."
+    "Summarise the Technical and Operational content and identify the key points in 10 bullet points."
+    "If there is content that is better suited to another expert, please state this."
+    "Identify positive and negative developments and the reasons given for these."
+    "If no reasons are given for the change, raise a question."
+    ,
+    "Financial": 
+    "Act as a Financial expert in  Mobile Networks, analyze the following text."
+    "Summarise the Financial content and identify the key points in 10 bullet points."
+    "If there is content that is better suited to another expert, please state this."
+    "Identify positive and negative developments and the reasons given for these."
+    "If no reasons are given for the change, raise a question."
 }
 
 # Function to analyze text using OpenAI
 def analyze_text(text, perspective):
+
     response = client.chat.completions.create(
         messages=[
-            {"role": "system", "content": f"You are a {perspective} expert."},
-            {"role": "user", "content": f"{prompts[perspective]}\n\n{text}"}
+            {"role": "system", "content": f"{prompts[perspective]}"},
+            {"role": "user", "content": f"\n\n{text}"}
         ],
         model="gpt-4-turbo",
         max_tokens=500
@@ -64,6 +71,31 @@ def analyze_pdf(pdf_path):
                     "analysis": analysis
                 })
             
+    return results
+
+def analyze_full_doc(pdf_path):
+    results = {perspective: [] for perspective in prompts.keys()}
+    all_pages_text = ""
+
+    with open(pdf_path, "rb") as file:
+        reader = PyPDF2.PdfReader(file)
+        num_pages = len(reader.pages)
+
+        for page_num in range(num_pages):
+            page_text = reader.pages[page_num].extract_text()
+            all_pages_text += "\n" + page_text  # Append each page's text with a newline
+
+    # Assuming page_title is the first line of the entire document
+    page_title = all_pages_text.split('\n', 1)[0]
+    print("\n\n\n", "Text in document:", page_title)
+
+    for perspective in prompts.keys():
+        analysis = analyze_text(all_pages_text, perspective)
+        print("\n\n", perspective, " expert:", analysis)
+        results[perspective].append({
+            "analysis": analysis
+        })
+
     return results
 
 # Function to synthesize comments from all experts
@@ -109,7 +141,7 @@ def summarize_document(synthesis):
     return document_summary
 
 # Main function to execute the analysis
-def main(pdf_path):
+def oldmain(pdf_path):
     results = analyze_pdf(pdf_path)
     synthesis = synthesize_comments(results)
     document_summary = summarize_document(synthesis)
@@ -133,6 +165,16 @@ def main(pdf_path):
     print("\nQuestions Raised:")
     for item in document_summary["questions_raised"]:
         print(item)
+
+def main(pdf_path):
+
+    results = analyze_full_doc(pdf_path)
+    
+    for perspective, analyses in results.items():
+        print(f"\nPerspective: {perspective}")
+        for analysis in analyses:
+            print(f"Analysis: {analysis['analysis']}")
+        
 
 # Path to your PDF document
 pdf_path = "./OpCo_MPR.pdf"
